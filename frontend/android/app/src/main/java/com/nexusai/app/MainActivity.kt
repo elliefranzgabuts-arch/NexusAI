@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -47,6 +49,35 @@ import kotlinx.coroutines.delay
 
 private const val TAG = "NEXUS-MainActivity"
 private const val COMMAND_TIMEOUT = 10_000L
+private val mainHandler = Handler(Looper.getMainLooper())
+
+private fun endCommandSessionAfterRecognizerCleanup(
+    commandToken: String,
+    onEnded: ((Boolean) -> Unit)? = null
+) {
+    // SpeechRecognizer dispatches cancel/destroy work through the main looper.
+    // Queue coordinator resumption after those framework cleanup messages.
+    mainHandler.post {
+        val ended = WakeWordCoordinator.endCommandSession(commandToken)
+        onEnded?.invoke(ended)
+    }
+}
+
+private fun disposeSpeechRecognizer(recognizer: SpeechRecognizer?) {
+    if (recognizer == null) return
+
+    try {
+        recognizer.cancel()
+    } catch (exception: Exception) {
+        Log.w(TAG, "Could not cancel speech recognizer during cleanup.", exception)
+    }
+
+    try {
+        recognizer.destroy()
+    } catch (exception: Exception) {
+        Log.w(TAG, "Could not destroy speech recognizer during cleanup.", exception)
+    }
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -70,145 +101,174 @@ fun NexusScreen() {
     var isCommandListening by remember { mutableStateOf(false) }
 
     var recognizedCommand by remember { mutableStateOf("") }
+    var commandResponse by remember { mutableStateOf("") }
     var speechError by remember { mutableStateOf("") }
+    var activeCommandToken by remember { mutableStateOf<String?>(null) }
+    var activeSpeechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
 
-    // Create an on-device speech recognizer.
-    val speechRecognizer = remember(context) {
-        try {
-            if (SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                Log.w(TAG, "On-device speech recognition unavailable.")
-                null
-            }
-        } catch (exception: Exception) {
-            Log.e(TAG, "Could not create speech recognizer.", exception)
-            null
-        }
-    }
-
-    // Restart wake-word detection after command recognition.
-    val resumeWakeWord = rememberUpdatedState<() -> Unit>(
-        newValue = {
-            val serviceIntent = Intent(
-                context,
-                WakeWordService::class.java
-            ).apply {
-                action = WakeWordService.ACTION_START
-            }
-
-            try {
-                context.startForegroundService(serviceIntent)
-                isListening = true
-
-                Log.i(TAG, "Wake-word detection restart requested.")
-            } catch (exception: Exception) {
-                Log.e(TAG, "Could not restart wake-word service.", exception)
-                isListening = false
-            }
-        }
-    )
-
-    // Finish the current command session.
-    val finishCommandSession = rememberUpdatedState<() -> Unit>(
-        newValue = {
-            if (isCommandListening) {
+    // Complete only this command's token, and release SpeechRecognizer before
+    // the coordinator is allowed to reacquire the microphone.
+    val finishCommandSession = rememberUpdatedState<(String) -> Unit>(
+        newValue = { commandToken ->
+            if (activeCommandToken == commandToken) {
+                activeCommandToken = null
                 isCommandListening = false
                 isActivated = false
 
-                Log.i(TAG, "Command listening session finished.")
+                val recognizer = activeSpeechRecognizer
+                activeSpeechRecognizer = null
+                disposeSpeechRecognizer(recognizer)
 
-                resumeWakeWord.value()
+                endCommandSessionAfterRecognizerCleanup(commandToken) { ended ->
+                    if (ended) {
+                        isListening = true
+                        Log.i(TAG, "Command session $commandToken finished; wake detection resumed.")
+                    }
+                }
+            } else {
+                Log.i(TAG, "Ignoring stale command completion: $commandToken")
             }
         }
     )
 
-    // Configure speech recognition callbacks.
-    DisposableEffect(speechRecognizer) {
-
-        if (speechRecognizer != null) {
-
-            speechRecognizer.setRecognitionListener(
-                object : RecognitionListener {
-
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        Log.i(TAG, "Ready for command speech.")
+    // Each recognition listener captures its command token. A delayed callback
+    // from an older SpeechRecognizer cannot finish a newer command session.
+    val startCommandRecognition = rememberUpdatedState<(String) -> Unit>(
+        newValue = { commandToken ->
+            if (activeCommandToken == commandToken) {
+                val recognizer = try {
+                    if (SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+                        SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+                    } else {
+                        null
                     }
-
-                    override fun onBeginningOfSpeech() {
-                        Log.i(TAG, "Command speech detected.")
-                    }
-
-                    override fun onRmsChanged(rmsdB: Float) {}
-
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-
-                    override fun onEndOfSpeech() {
-                        Log.i(TAG, "End of command speech.")
-                    }
-
-                    override fun onError(error: Int) {
-                        Log.e(
-                            TAG,
-                            "Speech recognition error: $error"
-                        )
-
-                        speechError = when (error) {
-                            SpeechRecognizer.ERROR_NO_MATCH ->
-                                "NO SPEECH RECOGNIZED"
-
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
-                                "NO COMMAND DETECTED"
-
-                            SpeechRecognizer.ERROR_NETWORK,
-                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
-                                "NETWORK ERROR"
-
-                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
-                                "MICROPHONE PERMISSION REQUIRED"
-
-                            else ->
-                                "SPEECH ERROR: $error"
-                        }
-
-                        finishCommandSession.value()
-                    }
-
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(
-                            SpeechRecognizer.RESULTS_RECOGNITION
-                        )
-
-                        val command = matches?.firstOrNull()
-
-                        if (!command.isNullOrBlank()) {
-                            recognizedCommand = command
-                            speechError = ""
-
-                            Log.i(
-                                TAG,
-                                "Recognized command: $command"
-                            )
-                        } else {
-                            speechError = "NO COMMAND RECOGNIZED"
-                        }
-
-                        finishCommandSession.value()
-                    }
-
-                    override fun onPartialResults(partialResults: Bundle?) {}
-
-                    override fun onEvent(
-                        eventType: Int,
-                        params: Bundle?
-                    ) {}
+                } catch (exception: Exception) {
+                    Log.e(TAG, "Could not create speech recognizer.", exception)
+                    null
                 }
-            )
-        }
 
+                if (recognizer == null) {
+                    speechError = "ON-DEVICE SPEECH UNAVAILABLE"
+                    isActivated = false
+                    finishCommandSession.value(commandToken)
+                } else {
+                    activeSpeechRecognizer = recognizer
+
+                    fun isCurrentSession(): Boolean =
+                        activeCommandToken == commandToken &&
+                            activeSpeechRecognizer === recognizer
+
+                    val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(
+                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                        )
+                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    }
+
+                    try {
+                        recognizer.setRecognitionListener(
+                            object : RecognitionListener {
+                                override fun onReadyForSpeech(params: Bundle?) {
+                                    if (isCurrentSession()) Log.i(TAG, "Ready for command speech.")
+                                }
+
+                                override fun onBeginningOfSpeech() {
+                                    if (isCurrentSession()) Log.i(TAG, "Command speech detected.")
+                                }
+
+                                override fun onRmsChanged(rmsdB: Float) {}
+
+                                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                                override fun onEndOfSpeech() {
+                                    if (isCurrentSession()) Log.i(TAG, "End of command speech.")
+                                }
+
+                                override fun onError(error: Int) {
+                                    if (!isCurrentSession()) {
+                                        Log.i(TAG, "Ignoring late speech error for $commandToken")
+                                        return
+                                    }
+
+                                    Log.e(TAG, "Speech recognition error: $error")
+                                    speechError = when (error) {
+                                        SpeechRecognizer.ERROR_NO_MATCH -> "NO SPEECH RECOGNIZED"
+                                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "NO COMMAND DETECTED"
+                                        SpeechRecognizer.ERROR_NETWORK,
+                                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "NETWORK ERROR"
+                                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                                            "MICROPHONE PERMISSION REQUIRED"
+                                        else -> "SPEECH ERROR: $error"
+                                    }
+
+                                    finishCommandSession.value(commandToken)
+                                }
+
+                                override fun onResults(results: Bundle?) {
+                                    if (!isCurrentSession()) {
+                                        Log.i(TAG, "Ignoring late speech results for $commandToken")
+                                        return
+                                    }
+
+                                    val matches = results?.getStringArrayList(
+                                        SpeechRecognizer.RESULTS_RECOGNITION
+                                    )
+                                    val command = matches?.firstOrNull()
+
+                                    if (!command.isNullOrBlank()) {
+                                        recognizedCommand = command
+                                        speechError = ""
+                                        commandResponse = try {
+                                            LocalCommandEngine.execute(context, command)
+                                        } catch (exception: Exception) {
+                                            Log.e(TAG, "Command execution failed.", exception)
+                                            "I couldn't execute that command."
+                                        }
+
+                                        Log.i(TAG, "Recognized command: $command")
+                                        Log.i(TAG, "Command response: $commandResponse")
+                                    } else {
+                                        commandResponse = ""
+                                        speechError = "NO COMMAND RECOGNIZED"
+                                    }
+
+                                    finishCommandSession.value(commandToken)
+                                }
+
+                                override fun onPartialResults(partialResults: Bundle?) {}
+
+                                override fun onEvent(eventType: Int, params: Bundle?) {}
+                            }
+                        )
+                        recognizer.startListening(speechIntent)
+                        Log.i(TAG, "10-second command listening started for $commandToken.")
+                    } catch (exception: Exception) {
+                        Log.e(TAG, "Could not start speech recognition.", exception)
+                        speechError = "COULD NOT START SPEECH RECOGNITION"
+                        finishCommandSession.value(commandToken)
+                    }
+                }
+            }
+        }
+    )
+
+    // Composition disposal ends an active command, but backgrounding the
+    // Activity alone does not dispose this effect or stop wake-word listening.
+    DisposableEffect(context) {
         onDispose {
-            speechRecognizer?.destroy()
-            Log.i(TAG, "Speech recognizer released.")
+            val commandToken = activeCommandToken
+            activeCommandToken = null
+            isCommandListening = false
+
+            val recognizer = activeSpeechRecognizer
+            activeSpeechRecognizer = null
+            disposeSpeechRecognizer(recognizer)
+
+            if (commandToken != null) {
+                endCommandSessionAfterRecognizerCleanup(commandToken)
+            }
         }
     }
 
@@ -218,67 +278,35 @@ fun NexusScreen() {
 
             Log.i(TAG, "Broadcast received: ${intent?.action}")
 
-            if (intent?.action == WakeWordService.ACTION_WAKE_DETECTED) {
+            val isWakeEvent = intent?.action == WakeWordService.ACTION_WAKE_DETECTED
+            val commandToken = if (isWakeEvent) {
+                intent.getStringExtra(WakeWordService.EXTRA_WAKE_TOKEN)
+            } else {
+                null
+            }
+            val wakeTokenClaimed = if (isWakeEvent) {
+                WakeWordCoordinator.acknowledgeWake(commandToken)
+            } else {
+                false
+            }
+
+            if (isWakeEvent && !wakeTokenClaimed) {
+                Log.w(TAG, "Ignoring expired or duplicate wake event.")
+            }
+
+            if (isWakeEvent && wakeTokenClaimed && commandToken != null) {
+                val claimedCommandToken = commandToken
+                activeCommandToken = claimedCommandToken
 
                 Log.i(TAG, "HEY NEXUS detected.")
 
                 recognizedCommand = ""
+                commandResponse = ""
                 speechError = ""
                 isActivated = true
 
-                if (speechRecognizer == null) {
-                    speechError = "ON-DEVICE SPEECH UNAVAILABLE"
-                    isActivated = false
-
-                    Log.e(
-                        TAG,
-                        "This device has no available on-device recognizer."
-                    )
-
-                    resumeWakeWord.value()
-
-                } else {
-
-                    isCommandListening = true
-
-                    val speechIntent = Intent(
-                        RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-                    ).apply {
-                        putExtra(
-                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                        )
-
-                        putExtra(
-                            RecognizerIntent.EXTRA_MAX_RESULTS,
-                            1
-                        )
-
-                        putExtra(
-                            RecognizerIntent.EXTRA_PREFER_OFFLINE,
-                            true
-                        )
-                    }
-
-                    try {
-                        speechRecognizer.startListening(speechIntent)
-
-                        Log.i(
-                            TAG,
-                            "10-second command listening started."
-                        )
-
-                    } catch (exception: Exception) {
-                        Log.e(
-                            TAG,
-                            "Could not start speech recognition.",
-                            exception
-                        )
-
-                        speechError = "COULD NOT START SPEECH RECOGNITION"
-                        finishCommandSession.value()
-                    }
-                }
+                isCommandListening = true
+                startCommandRecognition.value(claimedCommandToken)
             }
         }
     )
@@ -316,17 +344,15 @@ fun NexusScreen() {
     // Enforce the 10-second command timeout.
     LaunchedEffect(isCommandListening) {
 
-        if (isCommandListening) {
+        val commandToken = activeCommandToken
+        if (isCommandListening && commandToken != null) {
             delay(COMMAND_TIMEOUT)
 
-            if (isCommandListening) {
+            if (isCommandListening && activeCommandToken == commandToken) {
                 Log.i(TAG, "10-second command timeout reached.")
 
                 speechError = "COMMAND TIMEOUT"
-
-                speechRecognizer?.cancel()
-
-                finishCommandSession.value()
+                finishCommandSession.value(commandToken)
             }
         }
     }
@@ -395,7 +421,14 @@ fun NexusScreen() {
     }
 
     fun stopListening() {
-        speechRecognizer?.cancel()
+        WakeWordCoordinator.prepareExplicitStop()
+
+        activeCommandToken = null
+        isCommandListening = false
+
+        val recognizer = activeSpeechRecognizer
+        activeSpeechRecognizer = null
+        disposeSpeechRecognizer(recognizer)
 
         val serviceIntent = Intent(
             context,
@@ -408,7 +441,6 @@ fun NexusScreen() {
 
         isListening = false
         isActivated = false
-        isCommandListening = false
 
         Log.i(TAG, "NEXUS listening stopped.")
     }
@@ -671,7 +703,7 @@ fun NexusScreen() {
                     speechError.isNotBlank() ->
                         speechError
                     isListening ->
-                        "LISTENING FOR HEY NEXUS"
+                        "LISTENING FOR NEXUS"
                     else ->
                         "TAP CENTER TO ACTIVATE"
                 },
@@ -683,6 +715,17 @@ fun NexusScreen() {
                 fontSize = 9.sp,
                 letterSpacing = 1.2.sp
             )
+
+            if (commandResponse.isNotBlank()) {
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Text(
+                    text = commandResponse,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    letterSpacing = 0.5.sp
+                )
+            }
         }
     }
 }
