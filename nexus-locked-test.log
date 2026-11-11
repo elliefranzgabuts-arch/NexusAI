@@ -1,0 +1,15 @@
+--------- beginning of main
+11-11 14:20:07.220 25608 25608 I NEXUS-MainActivity: NEXUS listening stopped.
+11-11 14:20:07.270 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574864744 event=SERVICE_START_COMMAND action=com.nexusai.app.action.STOP_WAKE_WORD startId=2 owner=dce01a71-9f4b-4b99-920d-0666ca8d6b3c
+11-11 14:20:07.363 25608 30554 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=574864837 event=MICROPHONE_RELEASED session=427f307a-3af9-4840-bc11-aa9221b6d9e8 wakeDetected=false
+11-11 14:20:07.420 25608 30554 I NEXUS-WakeWord: Wake-word session cleanup complete: 427f307a-3af9-4840-bc11-aa9221b6d9e8
+11-11 14:20:07.420 25608 30554 I NEXUS-WakeWord: Worker 427f307a-3af9-4840-bc11-aa9221b6d9e8 finished: reason=cancellation requested wakeDetected=false intentionalCancellation=true
+11-11 14:20:07.434 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574864908 event=SERVICE_DESTROYED owner=dce01a71-9f4b-4b99-920d-0666ca8d6b3c
+11-11 14:20:14.188 25608 25608 I NEXUS-MainActivity: Wake-word service start requested.
+11-11 14:20:14.208 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574871682 event=SERVICE_CREATED owner=cb5e130e-65b2-4386-913c-2647a46a93dc
+11-11 14:20:14.208 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574871682 event=SERVICE_START_COMMAND action=com.nexusai.app.action.START_WAKE_WORD startId=1 owner=cb5e130e-65b2-4386-913c-2647a46a93dc
+11-11 14:20:14.212 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574871686 event=SERVICE_FOREGROUND_PROMOTED owner=cb5e130e-65b2-4386-913c-2647a46a93dc
+11-11 14:20:14.212 25608 25608 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=574871687 event=WAKE_SESSION_CREATED session=54060e87-d8e2-4050-98bd-b343bbc32652 owner=cb5e130e-65b2-4386-913c-2647a46a93dc state=STARTING
+11-11 14:20:14.213 25608 30554 I NEXUS-WakeWord: Initializing offline wake-word model session=54060e87-d8e2-4050-98bd-b343bbc32652
+11-11 14:20:15.498 25608 30554 I NEXUS-WakeWord: Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=54060e87-d8e2-4050-98bd-b343bbc32652
+11-11 14:20:45.499 25608 30567 I NEXUS-WakeWord: Listening remained stable; automatic retry backoff reset

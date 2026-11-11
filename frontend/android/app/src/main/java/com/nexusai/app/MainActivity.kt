@@ -7,9 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.app.KeyguardManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -48,8 +52,27 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 private const val TAG = "NEXUS-MainActivity"
-private const val COMMAND_TIMEOUT = 10_000L
+private const val RECOGNIZER_READY_TIMEOUT_MS = 10_000L
+private const val SPEECH_START_TIMEOUT_MS = 10_000L
+private const val SPEECH_CAPTURE_MAX_MS = 30_000L
+private const val SPEECH_RESULT_TIMEOUT_MS = 10_000L
 private val mainHandler = Handler(Looper.getMainLooper())
+
+private fun logVoiceEvent(
+    context: Context,
+    event: String,
+    commandToken: String,
+    details: String = ""
+) {
+    val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+    val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    Log.i(
+        TAG,
+        "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} event=$event " +
+            "token=$commandToken interactive=${power.isInteractive} " +
+            "keyguardLocked=${keyguard.isKeyguardLocked} $details"
+    )
+}
 
 private fun endCommandSessionAfterRecognizerCleanup(
     commandToken: String,
@@ -105,24 +128,38 @@ fun NexusScreen() {
     var speechError by remember { mutableStateOf("") }
     var activeCommandToken by remember { mutableStateOf<String?>(null) }
     var activeSpeechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    var recognitionRequestAtMs by remember { mutableLongStateOf(0L) }
+    var recognitionReadyAtMs by remember { mutableLongStateOf(0L) }
+    var speechStartedAtMs by remember { mutableLongStateOf(0L) }
+    var speechEndedAtMs by remember { mutableLongStateOf(0L) }
 
     // Complete only this command's token, and release SpeechRecognizer before
     // the coordinator is allowed to reacquire the microphone.
     val finishCommandSession = rememberUpdatedState<(String) -> Unit>(
         newValue = { commandToken ->
             if (activeCommandToken == commandToken) {
+                logVoiceEvent(context, "COMMAND_SESSION_FINISH", commandToken)
                 activeCommandToken = null
                 isCommandListening = false
                 isActivated = false
 
                 val recognizer = activeSpeechRecognizer
                 activeSpeechRecognizer = null
+                logVoiceEvent(
+                    context,
+                    "RECOGNIZER_CLEANUP_BEGIN",
+                    commandToken,
+                    "recognizerPresent=${recognizer != null}"
+                )
                 disposeSpeechRecognizer(recognizer)
+                logVoiceEvent(context, "RECOGNIZER_CLEANUP_COMPLETE", commandToken)
 
                 endCommandSessionAfterRecognizerCleanup(commandToken) { ended ->
                     if (ended) {
                         isListening = true
-                        Log.i(TAG, "Command session $commandToken finished; wake detection resumed.")
+                        logVoiceEvent(context, "WAKE_RESUME_REQUESTED", commandToken)
+                    } else {
+                        logVoiceEvent(context, "WAKE_RESUME_REJECTED", commandToken)
                     }
                 }
             } else {
@@ -136,8 +173,25 @@ fun NexusScreen() {
     val startCommandRecognition = rememberUpdatedState<(String) -> Unit>(
         newValue = { commandToken ->
             if (activeCommandToken == commandToken) {
+                logVoiceEvent(context, "SPEECH_RECOGNITION_REQUESTED", commandToken)
+                recognitionRequestAtMs = SystemClock.elapsedRealtime()
+                recognitionReadyAtMs = 0L
+                speechStartedAtMs = 0L
+                speechEndedAtMs = 0L
+                val onDeviceAvailable = try {
+                    SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+                } catch (exception: Exception) {
+                    Log.e(TAG, "VOICE_EVENT event=ON_DEVICE_AVAILABILITY_CHECK_FAILED token=$commandToken", exception)
+                    false
+                }
+                logVoiceEvent(
+                    context,
+                    "ON_DEVICE_RECOGNIZER_AVAILABILITY",
+                    commandToken,
+                    "available=$onDeviceAvailable"
+                )
                 val recognizer = try {
-                    if (SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+                    if (onDeviceAvailable) {
                         SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
                     } else {
                         null
@@ -148,6 +202,7 @@ fun NexusScreen() {
                 }
 
                 if (recognizer == null) {
+                    logVoiceEvent(context, "RECOGNIZER_CREATE_FAILED", commandToken)
                     speechError = "ON-DEVICE SPEECH UNAVAILABLE"
                     isActivated = false
                     finishCommandSession.value(commandToken)
@@ -171,11 +226,21 @@ fun NexusScreen() {
                         recognizer.setRecognitionListener(
                             object : RecognitionListener {
                                 override fun onReadyForSpeech(params: Bundle?) {
-                                    if (isCurrentSession()) Log.i(TAG, "Ready for command speech.")
+                                    if (isCurrentSession()) {
+                                        recognitionReadyAtMs = SystemClock.elapsedRealtime()
+                                        logVoiceEvent(context, "RECOGNIZER_READY", commandToken)
+                                    } else {
+                                        logVoiceEvent(context, "STALE_CALLBACK_READY", commandToken)
+                                    }
                                 }
 
                                 override fun onBeginningOfSpeech() {
-                                    if (isCurrentSession()) Log.i(TAG, "Command speech detected.")
+                                    if (isCurrentSession()) {
+                                        speechStartedAtMs = SystemClock.elapsedRealtime()
+                                        logVoiceEvent(context, "SPEECH_BEGIN", commandToken)
+                                    } else {
+                                        logVoiceEvent(context, "STALE_CALLBACK_SPEECH_BEGIN", commandToken)
+                                    }
                                 }
 
                                 override fun onRmsChanged(rmsdB: Float) {}
@@ -183,16 +248,32 @@ fun NexusScreen() {
                                 override fun onBufferReceived(buffer: ByteArray?) {}
 
                                 override fun onEndOfSpeech() {
-                                    if (isCurrentSession()) Log.i(TAG, "End of command speech.")
+                                    if (isCurrentSession()) {
+                                        speechEndedAtMs = SystemClock.elapsedRealtime()
+                                        logVoiceEvent(context, "SPEECH_END", commandToken)
+                                    } else {
+                                        logVoiceEvent(context, "STALE_CALLBACK_SPEECH_END", commandToken)
+                                    }
                                 }
 
                                 override fun onError(error: Int) {
                                     if (!isCurrentSession()) {
-                                        Log.i(TAG, "Ignoring late speech error for $commandToken")
+                                        logVoiceEvent(
+                                            context,
+                                            "STALE_CALLBACK_ERROR",
+                                            commandToken,
+                                            "errorCode=$error"
+                                        )
                                         return
                                     }
 
-                                    Log.e(TAG, "Speech recognition error: $error")
+                                    logVoiceEvent(
+                                        context,
+                                        "RECOGNIZER_ERROR",
+                                        commandToken,
+                                        "errorCode=$error readyAtMs=$recognitionReadyAtMs " +
+                                            "speechStartedAtMs=$speechStartedAtMs"
+                                    )
                                     speechError = when (error) {
                                         SpeechRecognizer.ERROR_NO_MATCH -> "NO SPEECH RECOGNIZED"
                                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "NO COMMAND DETECTED"
@@ -208,7 +289,7 @@ fun NexusScreen() {
 
                                 override fun onResults(results: Bundle?) {
                                     if (!isCurrentSession()) {
-                                        Log.i(TAG, "Ignoring late speech results for $commandToken")
+                                        logVoiceEvent(context, "STALE_CALLBACK_RESULTS", commandToken)
                                         return
                                     }
 
@@ -218,6 +299,12 @@ fun NexusScreen() {
                                     val command = matches?.firstOrNull()
 
                                     if (!command.isNullOrBlank()) {
+                                        logVoiceEvent(
+                                            context,
+                                            "RECOGNIZER_RESULTS",
+                                            commandToken,
+                                            "resultCount=${matches.size}"
+                                        )
                                         recognizedCommand = command
                                         speechError = ""
                                         commandResponse = try {
@@ -227,9 +314,8 @@ fun NexusScreen() {
                                             "I couldn't execute that command."
                                         }
 
-                                        Log.i(TAG, "Recognized command: $command")
-                                        Log.i(TAG, "Command response: $commandResponse")
                                     } else {
+                                        logVoiceEvent(context, "RECOGNIZER_EMPTY_RESULTS", commandToken)
                                         commandResponse = ""
                                         speechError = "NO COMMAND RECOGNIZED"
                                     }
@@ -242,9 +328,16 @@ fun NexusScreen() {
                                 override fun onEvent(eventType: Int, params: Bundle?) {}
                             }
                         )
+                        logVoiceEvent(context, "START_LISTENING_CALL", commandToken)
                         recognizer.startListening(speechIntent)
-                        Log.i(TAG, "10-second command listening started for $commandToken.")
+                        logVoiceEvent(context, "START_LISTENING_RETURNED", commandToken)
                     } catch (exception: Exception) {
+                        logVoiceEvent(
+                            context,
+                            "START_LISTENING_FAILED",
+                            commandToken,
+                            "exception=${exception.javaClass.simpleName}"
+                        )
                         Log.e(TAG, "Could not start speech recognition.", exception)
                         speechError = "COULD NOT START SPEECH RECOGNITION"
                         finishCommandSession.value(commandToken)
@@ -296,9 +389,8 @@ fun NexusScreen() {
 
             if (isWakeEvent && wakeTokenClaimed && commandToken != null) {
                 val claimedCommandToken = commandToken
+                logVoiceEvent(context, "WAKE_TOKEN_CLAIMED", claimedCommandToken)
                 activeCommandToken = claimedCommandToken
-
-                Log.i(TAG, "HEY NEXUS detected.")
 
                 recognizedCommand = ""
                 commandResponse = ""
@@ -341,19 +433,71 @@ fun NexusScreen() {
         }
     }
 
-    // Enforce the 10-second command timeout.
-    LaunchedEffect(isCommandListening) {
-
+    // Each stage receives its own bounded deadline. Recognizer startup no
+    // longer consumes the user's full speaking window.
+    LaunchedEffect(
+        activeCommandToken,
+        recognitionRequestAtMs,
+        recognitionReadyAtMs,
+        speechStartedAtMs,
+        speechEndedAtMs
+    ) {
         val commandToken = activeCommandToken
-        if (isCommandListening && commandToken != null) {
-            delay(COMMAND_TIMEOUT)
+        if (!isCommandListening || commandToken == null) return@LaunchedEffect
 
-            if (isCommandListening && activeCommandToken == commandToken) {
-                Log.i(TAG, "10-second command timeout reached.")
+        val stage = when {
+            recognitionRequestAtMs == 0L -> return@LaunchedEffect
+            recognitionReadyAtMs == 0L -> "waiting_for_recognizer_ready"
+            speechStartedAtMs == 0L -> "waiting_for_speech_start"
+            speechEndedAtMs == 0L -> "capturing_speech"
+            else -> "waiting_for_result"
+        }
+        val stageStartedAtMs = when (stage) {
+            "waiting_for_recognizer_ready" -> recognitionRequestAtMs
+            "waiting_for_speech_start" -> recognitionReadyAtMs
+            "capturing_speech" -> speechStartedAtMs
+            else -> speechEndedAtMs
+        }
+        val stageTimeoutMs = when (stage) {
+            "waiting_for_recognizer_ready" -> RECOGNIZER_READY_TIMEOUT_MS
+            "waiting_for_speech_start" -> SPEECH_START_TIMEOUT_MS
+            "capturing_speech" -> SPEECH_CAPTURE_MAX_MS
+            else -> SPEECH_RESULT_TIMEOUT_MS
+        }
 
-                speechError = "COMMAND TIMEOUT"
-                finishCommandSession.value(commandToken)
+        delay(stageTimeoutMs)
+
+        val sameStageStillActive = when (stage) {
+            "waiting_for_recognizer_ready" -> recognitionReadyAtMs == 0L
+            "waiting_for_speech_start" ->
+                recognitionReadyAtMs != 0L && speechStartedAtMs == 0L
+            "capturing_speech" ->
+                speechStartedAtMs != 0L && speechEndedAtMs == 0L
+            else -> speechEndedAtMs != 0L
+        }
+
+        if (
+            activeCommandToken == commandToken &&
+            isCommandListening &&
+            sameStageStillActive
+        ) {
+            logVoiceEvent(
+                context,
+                "APP_STAGE_WATCHDOG_TIMEOUT",
+                commandToken,
+                "stage=$stage timeoutMs=$stageTimeoutMs " +
+                    "stageElapsedMs=${SystemClock.elapsedRealtime() - stageStartedAtMs} " +
+                    "requestAtMs=$recognitionRequestAtMs readyAtMs=$recognitionReadyAtMs " +
+                    "speechStartedAtMs=$speechStartedAtMs speechEndedAtMs=$speechEndedAtMs"
+            )
+
+            speechError = when (stage) {
+                "waiting_for_recognizer_ready" -> "SPEECH SERVICE DID NOT BECOME READY"
+                "waiting_for_speech_start" -> "NO COMMAND DETECTED"
+                "capturing_speech" -> "SPEECH CAPTURE TIMED OUT"
+                else -> "SPEECH RESULT TIMED OUT"
             }
+            finishCommandSession.value(commandToken)
         }
     }
 
@@ -397,18 +541,30 @@ fun NexusScreen() {
                 Manifest.permission.RECORD_AUDIO
             ) == PackageManager.PERMISSION_GRANTED
 
+        val notificationPermissionNeeded =
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+
         if (microphoneGranted) {
-            val serviceIntent = Intent(
-                context,
-                WakeWordService::class.java
-            ).apply {
-                action = WakeWordService.ACTION_START
+            if (notificationPermissionNeeded) {
+                permissionLauncher.launch(
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS)
+                )
+            } else {
+                val serviceIntent = Intent(
+                    context,
+                    WakeWordService::class.java
+                ).apply {
+                    action = WakeWordService.ACTION_START
+                }
+
+                context.startForegroundService(serviceIntent)
+                isListening = true
+
+                Log.i(TAG, "Wake-word service start requested.")
             }
-
-            context.startForegroundService(serviceIntent)
-            isListening = true
-
-            Log.i(TAG, "Wake-word service start requested.")
 
         } else {
             permissionLauncher.launch(
@@ -697,6 +853,8 @@ fun NexusScreen() {
 
             Text(
                 text = when {
+                    isCommandListening && recognitionReadyAtMs == 0L ->
+                        "STARTING SPEECH RECOGNIZER"
                     isCommandListening -> "SPEAK NOW · 10 SECOND WINDOW"
                     recognizedCommand.isNotBlank() ->
                         "HEARD: ${recognizedCommand.uppercase()}"

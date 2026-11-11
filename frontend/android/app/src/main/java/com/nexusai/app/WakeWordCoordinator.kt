@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import java.lang.ref.WeakReference
 import java.util.UUID
@@ -15,6 +16,9 @@ import java.util.concurrent.ThreadFactory
 /** Coordinates microphone ownership across WakeWordService instances. */
 internal object WakeWordCoordinator {
     private const val TAG = "NEXUS-WakeWord"
+    private const val RETRY_INITIAL_DELAY_MS = 1_000L
+    private const val RETRY_MAX_DELAY_MS = 30_000L
+    private const val STABLE_LISTENING_RESET_MS = 30_000L
 
     const val WAKE_ACK_TIMEOUT_MS = 5_000L
 
@@ -23,6 +27,7 @@ internal object WakeWordCoordinator {
         STARTING,
         LISTENING,
         CLEANING,
+        RETRY_WAIT,
         WAITING_FOR_ACK,
         COMMAND_ACTIVE,
         STOPPING
@@ -63,6 +68,10 @@ internal object WakeWordCoordinator {
     private var waitingWakeToken: String? = null
     private var activeCommandToken: String? = null
     private var wakeAckTimeout: ScheduledFuture<*>? = null
+    private var retryAttempt = 0L
+    private var retryFuture: ScheduledFuture<*>? = null
+    private var retryTaskToken: String? = null
+    private var stableListeningFuture: ScheduledFuture<*>? = null
     private var stopRequest: StopRequest? = null
 
     private fun namedDaemonThreadFactory(name: String) = ThreadFactory { runnable ->
@@ -87,6 +96,9 @@ internal object WakeWordCoordinator {
             latestStartId = 0
             desiredListening = false
             pendingStart = false
+            retryAttempt = 0L
+            cancelRetryLocked()
+            cancelStableListeningResetLocked()
             stopRequest = null
             cancelWakeAckTimeoutLocked()
             waitingWakeToken = null
@@ -118,6 +130,9 @@ internal object WakeWordCoordinator {
             currentOwnerToken = null
             desiredListening = false
             pendingStart = false
+            retryAttempt = 0L
+            cancelRetryLocked()
+            cancelStableListeningResetLocked()
             stopRequest = null
             cancelWakeAckTimeoutLocked()
             waitingWakeToken = null
@@ -150,6 +165,9 @@ internal object WakeWordCoordinator {
             desiredListening = false
             latestStartId = startId
             pendingStart = false
+            retryAttempt = 0L
+            cancelRetryLocked()
+            cancelStableListeningResetLocked()
             cancelWakeAckTimeoutLocked()
             waitingWakeToken = null
             activeCommandToken = null
@@ -211,6 +229,11 @@ internal object WakeWordCoordinator {
                     }
                 }
 
+                State.RETRY_WAIT -> {
+                    // A retry is already scheduled. Coalesce this start request.
+                    pendingStart = true
+                }
+
                 State.WAITING_FOR_ACK -> {
                     cancelWakeAckTimeoutLocked()
                     waitingWakeToken = null
@@ -244,7 +267,11 @@ internal object WakeWordCoordinator {
             waitingWakeToken = null
             activeCommandToken = wakeToken
             state = State.COMMAND_ACTIVE
-            Log.i(TAG, "Wake token acknowledged; command recognition owns microphone")
+            Log.i(
+                TAG,
+                "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                    "event=MICROPHONE_HANDOFF_GRANTED token=$wakeToken state=$state"
+            )
             return true
         }
     }
@@ -263,11 +290,18 @@ internal object WakeWordCoordinator {
             }
 
             activeCommandToken = null
+            cancelRetryLocked()
             if (currentOwnerToken != null && desiredListening) {
                 sessionToRun = createSessionLocked(currentOwnerToken!!, latestStartId)
             } else {
                 state = State.IDLE
             }
+            Log.i(
+                TAG,
+                "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                    "event=COMMAND_SESSION_ENDED token=$commandToken nextSession=${sessionToRun?.sessionToken} " +
+                    "desiredListening=$desiredListening state=$state"
+            )
         }
 
         sessionToRun?.let(::submitSession)
@@ -283,6 +317,9 @@ internal object WakeWordCoordinator {
             pendingStart = false
             activeCommandToken = null
             waitingWakeToken = null
+            retryAttempt = 0L
+            cancelRetryLocked()
+            cancelStableListeningResetLocked()
             cancelWakeAckTimeoutLocked()
             stopRequest = null
 
@@ -300,6 +337,20 @@ internal object WakeWordCoordinator {
         synchronized(lock) {
             if (activeSession?.sessionToken == session.sessionToken && state == State.STARTING) {
                 state = State.LISTENING
+                cancelStableListeningResetLocked()
+                stableListeningFuture = controlScheduler.schedule({
+                    synchronized(lock) {
+                        if (
+                            activeSession?.sessionToken == session.sessionToken &&
+                            currentOwnerToken == session.ownerToken &&
+                            state == State.LISTENING
+                        ) {
+                            retryAttempt = 0L
+                            stableListeningFuture = null
+                            Log.i(TAG, "Listening remained stable; automatic retry backoff reset")
+                        }
+                    }
+                }, STABLE_LISTENING_RESET_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
             }
         }
     }
@@ -312,6 +363,9 @@ internal object WakeWordCoordinator {
             ) {
                 state = State.CLEANING
             }
+            if (activeSession?.sessionToken == session.sessionToken) {
+                cancelStableListeningResetLocked()
+            }
         }
     }
 
@@ -321,7 +375,12 @@ internal object WakeWordCoordinator {
         }
     }
 
-    fun workerFinished(session: WakeWordSession, wakeDetected: Boolean) {
+    fun workerFinished(
+        session: WakeWordSession,
+        wakeDetected: Boolean,
+        terminationReason: String,
+        intentionalCancellation: Boolean
+    ) {
         var wakeIntent: Intent? = null
         var nextSession: WakeWordSession? = null
         var stopToComplete: StopRequest? = null
@@ -334,6 +393,11 @@ internal object WakeWordCoordinator {
 
             activeSession = null
             val ownerIsCurrent = currentOwnerToken == session.ownerToken
+            Log.i(
+                TAG,
+                "Worker ${session.sessionToken} finished: reason=$terminationReason " +
+                    "wakeDetected=$wakeDetected intentionalCancellation=$intentionalCancellation"
+            )
 
             when {
                 state == State.STOPPING || !ownerIsCurrent -> {
@@ -350,6 +414,8 @@ internal object WakeWordCoordinator {
                 }
 
                 wakeDetected && !session.cancelled && desiredListening -> {
+                    retryAttempt = 0L
+                    cancelRetryLocked()
                     // Do not restart capture until the activity claims this token.
                     pendingStart = false
                     waitingWakeToken = session.sessionToken
@@ -362,6 +428,14 @@ internal object WakeWordCoordinator {
                     wakeIntent = Intent(WakeWordService.ACTION_WAKE_DETECTED)
                         .putExtra(WakeWordService.EXTRA_WAKE_TOKEN, session.sessionToken)
                         .setPackage(session.applicationContext.packageName)
+                }
+
+                !wakeDetected && !intentionalCancellation && desiredListening && ownerIsCurrent &&
+                    activeCommandToken == null && waitingWakeToken == null &&
+                    state != State.WAITING_FOR_ACK && state != State.COMMAND_ACTIVE &&
+                    state != State.STOPPING -> {
+                    pendingStart = false
+                    scheduleAutomaticRetryLocked(session, terminationReason)
                 }
 
                 else -> {
@@ -378,7 +452,11 @@ internal object WakeWordCoordinator {
         // The worker has released AudioRecord, stream, and spotter before this
         // callback. Broadcast delivery therefore cannot overlap mic ownership.
         wakeIntent?.let { intent ->
-            Log.i(TAG, "Microphone and model released; sending wake broadcast")
+            Log.i(
+                TAG,
+                "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                    "event=MICROPHONE_RELEASED_WAKE_BROADCAST session=${session.sessionToken}"
+            )
             session.applicationContext.sendBroadcast(intent)
         }
 
@@ -396,7 +474,11 @@ internal object WakeWordCoordinator {
             wakeAckTimeout = null
             activeCommandToken = null
             state = State.IDLE
-            Log.w(TAG, "Wake acknowledgement timed out; resuming local detection")
+            Log.w(
+                TAG,
+                "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                    "event=WAKE_ACK_WATCHDOG_TIMEOUT token=$wakeToken; resuming local detection"
+            )
 
             val owner = currentOwnerToken
             if (owner != null && desiredListening) {
@@ -418,17 +500,99 @@ internal object WakeWordCoordinator {
         )
         activeSession = session
         state = State.STARTING
+        Log.i(
+            TAG,
+            "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                "event=WAKE_SESSION_CREATED session=${session.sessionToken} owner=$ownerToken state=$state"
+        )
         return session
     }
 
-    private fun submitSession(session: WakeWordSession) {
+    private fun scheduleAutomaticRetryLocked(session: WakeWordSession, reason: String) {
+        cancelRetryLocked()
+
+        if (retryAttempt < Long.MAX_VALUE) retryAttempt += 1L
+        val attempt = retryAttempt
+        val shift = (attempt - 1L).coerceAtMost(30L).toInt()
+        val delayMs = minOf(RETRY_MAX_DELAY_MS, RETRY_INITIAL_DELAY_MS * (1L shl shift))
+        val retryToken = UUID.randomUUID().toString()
+        val ownerToken = session.ownerToken
+        retryTaskToken = retryToken
+        state = State.RETRY_WAIT
+
+        try {
+            retryFuture = controlScheduler.schedule(
+                { runAutomaticRetry(ownerToken, retryToken, attempt, delayMs) },
+                delayMs,
+                java.util.concurrent.TimeUnit.MILLISECONDS
+            )
+            Log.w(
+                TAG,
+                "Scheduled automatic retry attempt=$attempt delayMs=$delayMs " +
+                    "owner=$ownerToken failedSession=${session.sessionToken} reason=$reason"
+            )
+        } catch (exception: Exception) {
+            retryFuture = null
+            retryTaskToken = null
+            state = State.IDLE
+            Log.e(TAG, "Could not schedule automatic retry attempt=$attempt", exception)
+        }
+    }
+
+    private fun runAutomaticRetry(
+        ownerToken: String,
+        retryToken: String,
+        attempt: Long,
+        delayMs: Long
+    ) {
+        val sessionToRun = synchronized(lock) {
+            if (
+                retryTaskToken != retryToken ||
+                currentOwnerToken != ownerToken ||
+                !desiredListening ||
+                state != State.RETRY_WAIT ||
+                activeSession != null ||
+                activeCommandToken != null ||
+                waitingWakeToken != null
+            ) {
+                Log.i(
+                    TAG,
+                    "Discarding stale automatic retry attempt=$attempt " +
+                        "owner=$ownerToken retryToken=$retryToken state=$state"
+                )
+                return
+            }
+
+            retryFuture = null
+            retryTaskToken = null
+            pendingStart = false
+            createSessionLocked(ownerToken, latestStartId)
+        }
+
+        Log.i(TAG, "Starting automatic retry attempt=$attempt after delayMs=$delayMs")
+        val submitted = submitSession(sessionToRun)
+        Log.i(
+            TAG,
+            "Automatic retry attempt=$attempt result=${if (submitted) "SUBMITTED" else "REJECTED"} " +
+                "session=${sessionToRun.sessionToken}"
+        )
+    }
+
+    private fun submitSession(session: WakeWordSession): Boolean {
         try {
             detectionExecutor.execute {
                 WakeWordDetection.run(session, this)
             }
+            return true
         } catch (exception: Exception) {
             Log.e(TAG, "Could not submit wake-word session", exception)
-            workerFinished(session, wakeDetected = false)
+            workerFinished(
+                session = session,
+                wakeDetected = false,
+                terminationReason = "detection executor submission failed: ${exception.message}",
+                intentionalCancellation = session.cancelled
+            )
+            return false
         }
     }
 
@@ -450,5 +614,16 @@ internal object WakeWordCoordinator {
     private fun cancelWakeAckTimeoutLocked() {
         wakeAckTimeout?.cancel(false)
         wakeAckTimeout = null
+    }
+
+    private fun cancelRetryLocked() {
+        retryFuture?.cancel(false)
+        retryFuture = null
+        retryTaskToken = null
+    }
+
+    private fun cancelStableListeningResetLocked() {
+        stableListeningFuture?.cancel(false)
+        stableListeningFuture = null
     }
 }

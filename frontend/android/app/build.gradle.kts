@@ -32,5 +32,7 @@ dependencies {
 
     implementation(files("libs/sherpa-onnx-2.0.1.aar"))
 
+    testImplementation(libs.junit)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

@@ -1,0 +1,53 @@
+--------- beginning of main
+11-11 14:37:11.472 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=2108.4 peak=8387
+11-11 14:37:12.482 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=1236.0 peak=8302
+11-11 14:37:13.459 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=376.3 peak=1208
+11-11 14:37:14.479 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=443.6 peak=1635
+11-11 14:37:15.469 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=200.8 peak=693
+11-11 14:37:16.459 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=284.4 peak=1231
+11-11 14:37:17.479 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=315.3 peak=2816
+11-11 14:37:17.820 I/NEXUS-MainActivity(25608): NEXUS listening stopped.
+11-11 14:37:17.901 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575895375 event=MICROPHONE_RELEASED session=8a05e1e3-f41c-41a7-bc4b-1443079e9614 wakeDetected=false
+11-11 14:37:17.943 I/NEXUS-WakeWord(25608): Wake-word session cleanup complete: 8a05e1e3-f41c-41a7-bc4b-1443079e9614
+11-11 14:37:17.943 I/NEXUS-WakeWord(25608): Worker 8a05e1e3-f41c-41a7-bc4b-1443079e9614 finished: reason=cancellation requested wakeDetected=false intentionalCancellation=true
+11-11 14:37:18.542 I/NEXUS-MainActivity(25608): Wake-word service start requested.
+11-11 14:37:18.565 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575896039 event=WAKE_SESSION_CREATED session=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba owner=f16c1850-cc59-458b-acd8-ed7460742bf1 state=STARTING
+11-11 14:37:18.568 I/NEXUS-WakeWord(25608): Initializing offline wake-word model session=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba
+11-11 14:37:19.891 I/NEXUS-WakeWord(25608): Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba
+11-11 14:37:20.964 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=919.6 peak=3282
+11-11 14:37:21.964 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=494.8 peak=2108
+11-11 14:37:22.963 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=6523.0 peak=25954
+11-11 14:37:23.704 I/NEXUS-WakeWord(25608): Wake word detected: NEXUS
+11-11 14:37:23.790 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575901264 event=MICROPHONE_RELEASED session=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba wakeDetected=true
+11-11 14:37:23.823 I/NEXUS-WakeWord(25608): Wake-word session cleanup complete: 3f6f3063-069e-4b0b-8d42-142e1c3ed2ba
+11-11 14:37:23.823 I/NEXUS-WakeWord(25608): Worker 3f6f3063-069e-4b0b-8d42-142e1c3ed2ba finished: reason=wake detected: NEXUS wakeDetected=true intentionalCancellation=false
+11-11 14:37:23.823 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575901297 event=MICROPHONE_RELEASED_WAKE_BROADCAST session=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba
+11-11 14:37:23.825 I/NEXUS-MainActivity(25608): Broadcast received: com.nexusai.app.action.WAKE_DETECTED
+11-11 14:37:23.825 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575901299 event=MICROPHONE_HANDOFF_GRANTED token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba state=COMMAND_ACTIVE
+11-11 14:37:23.826 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575901299 event=WAKE_TOKEN_CLAIMED token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:23.826 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575901300 event=SPEECH_RECOGNITION_REQUESTED token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:23.828 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575901301 event=ON_DEVICE_RECOGNIZER_AVAILABILITY token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false available=true
+11-11 14:37:23.828 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575901302 event=START_LISTENING_CALL token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:23.830 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575901304 event=START_LISTENING_RETURNED token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:24.056 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575901529 event=RECOGNIZER_READY token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:27.967 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575905441 event=SPEECH_BEGIN token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:29.246 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906720 event=SPEECH_END token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:29.248 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906721 event=SPEECH_END token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:29.263 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906736 event=RECOGNIZER_RESULTS token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false resultCount=2
+11-11 14:37:29.272 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906746 event=COMMAND_SESSION_FINISH token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:29.273 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906747 event=RECOGNIZER_CLEANUP_BEGIN token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false recognizerPresent=true
+11-11 14:37:29.274 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906748 event=RECOGNIZER_CLEANUP_COMPLETE token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:29.298 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575906772 event=WAKE_SESSION_CREATED session=4a262749-20d5-48a6-bd75-b77d686a0f48 owner=f16c1850-cc59-458b-acd8-ed7460742bf1 state=STARTING
+11-11 14:37:29.298 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575906772 event=COMMAND_SESSION_ENDED token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba nextSession=4a262749-20d5-48a6-bd75-b77d686a0f48 desiredListening=true state=STARTING
+11-11 14:37:29.298 I/NEXUS-WakeWord(25608): Initializing offline wake-word model session=4a262749-20d5-48a6-bd75-b77d686a0f48
+11-11 14:37:29.299 I/NEXUS-MainActivity(25608): VOICE_EVENT elapsedMs=575906772 event=WAKE_RESUME_REQUESTED token=3f6f3063-069e-4b0b-8d42-142e1c3ed2ba interactive=true keyguardLocked=false 
+11-11 14:37:30.557 I/NEXUS-WakeWord(25608): Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=4a262749-20d5-48a6-bd75-b77d686a0f48
+11-11 14:37:31.651 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=363.4 peak=1156
+11-11 14:37:32.651 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=259.7 peak=990
+11-11 14:37:33.650 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=254.0 peak=787
+11-11 14:37:34.692 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=465.4 peak=1378
+11-11 14:37:35.649 D/NEXUS-WakeWord(25608): NEXUS-AUDIO rms=296.0 peak=1305
+11-11 14:37:35.699 I/NEXUS-MainActivity(25608): NEXUS listening stopped.
+11-11 14:37:35.769 I/NEXUS-WakeWord(25608): VOICE_EVENT elapsedMs=575913243 event=MICROPHONE_RELEASED session=4a262749-20d5-48a6-bd75-b77d686a0f48 wakeDetected=false
+11-11 14:37:35.804 I/NEXUS-WakeWord(25608): Wake-word session cleanup complete: 4a262749-20d5-48a6-bd75-b77d686a0f48
+11-11 14:37:35.804 I/NEXUS-WakeWord(25608): Worker 4a262749-20d5-48a6-bd75-b77d686a0f48 finished: reason=cancellation requested wakeDetected=false intentionalCancellation=true

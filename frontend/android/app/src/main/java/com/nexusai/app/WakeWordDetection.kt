@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import android.os.SystemClock
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.KeywordSpotter
 import com.k2fsa.sherpa.onnx.KeywordSpotterConfig
@@ -111,6 +112,7 @@ internal object WakeWordDetection {
         var stream: OnlineStream? = null
         var recorderLease: AudioRecordLease? = null
         var wakeDetected = false
+        var terminationReason = "worker exited without wake detection"
 
         try {
             session.throwIfCancelled()
@@ -212,28 +214,41 @@ internal object WakeWordDetection {
                         if (result.keyword.isNotBlank()) {
                             Log.i(TAG, "Wake word detected: ${result.keyword}")
                             wakeDetected = true
+                            terminationReason = "wake detected: ${result.keyword}"
                             break
                         }
                     }
 
                     if (wakeDetected) break
                 } else if (samplesRead < 0) {
-                    if (!session.cancelled) {
-                        Log.e(TAG, "AudioRecord read error: $samplesRead")
-                    }
+                    terminationReason = "AudioRecord.read returned $samplesRead"
+                    Log.e(TAG, "AudioRecord read error: $samplesRead")
                     break
                 }
             }
         } catch (exception: CancellationException) {
+            terminationReason = "cancellation requested"
             Log.i(TAG, "Wake-word session cancelled: ${session.sessionToken}")
         } catch (exception: Exception) {
+            terminationReason = "${exception.javaClass.simpleName}: ${exception.message ?: "no message"}"
             Log.e(TAG, "Wake-word session failed: ${session.sessionToken}", exception)
         } finally {
             coordinator.markCleaning(session)
-            session.cancelled = session.cancelled || !wakeDetected
+
+            if (!wakeDetected && session.cancelled) {
+                terminationReason = "cancellation requested"
+            } else if (!wakeDetected && Thread.currentThread().isInterrupted) {
+                terminationReason = "worker thread interrupted"
+            }
 
             try {
                 recorderLease?.close()
+                Log.i(
+                    TAG,
+                    "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                        "event=MICROPHONE_RELEASED session=${session.sessionToken} " +
+                        "wakeDetected=$wakeDetected"
+                )
             } catch (exception: Exception) {
                 Log.w(TAG, "Microphone cleanup issue", exception)
             }
@@ -251,7 +266,12 @@ internal object WakeWordDetection {
             }
 
             Log.i(TAG, "Wake-word session cleanup complete: ${session.sessionToken}")
-            coordinator.workerFinished(session, wakeDetected)
+            coordinator.workerFinished(
+                session = session,
+                wakeDetected = wakeDetected,
+                terminationReason = terminationReason,
+                intentionalCancellation = session.cancelled
+            )
         }
     }
 

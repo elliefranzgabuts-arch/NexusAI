@@ -9,8 +9,12 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
+import android.util.Log
 
 class WakeWordService : Service() {
+
+    private val tag = "NEXUS-WakeWordService"
 
     companion object {
         private const val CHANNEL_ID = "nexus_wake_word"
@@ -31,6 +35,11 @@ class WakeWordService : Service() {
         ownerToken = WakeWordCoordinator.newOwnerToken()
         createNotificationChannel()
         WakeWordCoordinator.attachOwner(ownerToken, applicationContext)
+        Log.i(
+            tag,
+            "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                "event=SERVICE_CREATED owner=$ownerToken"
+        )
     }
 
     override fun onStartCommand(
@@ -38,6 +47,11 @@ class WakeWordService : Service() {
         flags: Int,
         startId: Int
     ): Int {
+        Log.i(
+            tag,
+            "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                "event=SERVICE_START_COMMAND action=${intent?.action} startId=$startId owner=$ownerToken"
+        )
         when (intent?.action) {
             ACTION_STOP -> {
                 val stopImmediately = WakeWordCoordinator.requestStop(
@@ -74,6 +88,11 @@ class WakeWordService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        Log.i(
+            tag,
+            "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                "event=SERVICE_FOREGROUND_PROMOTED owner=$ownerToken"
+        )
     }
 
     private fun createNotificationChannel() {
@@ -110,6 +129,11 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        Log.i(
+            tag,
+            "VOICE_EVENT elapsedMs=${SystemClock.elapsedRealtime()} " +
+                "event=SERVICE_DESTROYED owner=$ownerToken"
+        )
         WakeWordCoordinator.detachOwner(ownerToken)
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

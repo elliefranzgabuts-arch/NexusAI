@@ -1,0 +1,80 @@
+--------- beginning of main
+11-11 14:04:29.577 16141 28587 I NEXUS-WakeWord: Wake word detected: NEXUS
+11-11 14:04:29.662 16141 28587 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573927136 event=MICROPHONE_RELEASED session=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c wakeDetected=true
+11-11 14:04:29.697 16141 28587 I NEXUS-WakeWord: Wake-word session cleanup complete: 5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c
+11-11 14:04:29.697 16141 28587 I NEXUS-WakeWord: Worker 5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c finished: reason=wake detected: NEXUS wakeDetected=true intentionalCancellation=false
+11-11 14:04:29.698 16141 28587 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573927172 event=MICROPHONE_RELEASED_WAKE_BROADCAST session=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c
+11-11 14:04:29.711 16141 16141 I NEXUS-MainActivity: Broadcast received: com.nexusai.app.action.WAKE_DETECTED
+11-11 14:04:29.711 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573927185 event=MICROPHONE_HANDOFF_GRANTED token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c state=COMMAND_ACTIVE
+11-11 14:04:29.713 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573927187 event=WAKE_TOKEN_CLAIMED token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:29.714 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573927188 event=SPEECH_RECOGNITION_REQUESTED token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:29.717 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573927190 event=ON_DEVICE_RECOGNIZER_AVAILABILITY token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false available=true
+11-11 14:04:29.719 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573927193 event=START_LISTENING_CALL token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:29.723 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573927195 event=START_LISTENING_RETURNED token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:30.115 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573927589 event=RECOGNIZER_READY token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:35.191 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573932665 event=RECOGNIZER_ERROR token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false errorCode=7 readyAtMs=573927589 speechStartedAtMs=0
+11-11 14:04:35.192 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573932666 event=COMMAND_SESSION_FINISH token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:35.193 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573932667 event=RECOGNIZER_CLEANUP_BEGIN token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false recognizerPresent=true
+11-11 14:04:35.194 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573932668 event=RECOGNIZER_CLEANUP_COMPLETE token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:35.195 16141 16141 E SpeechRecognizer: not connected to the recognition service
+11-11 14:04:35.195 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573932669 event=WAKE_SESSION_CREATED session=27a0ffc5-ffd4-4047-a688-139acb78bd7f owner=789cf4c1-ed26-428b-baad-d85fd5405b42 state=STARTING
+11-11 14:04:35.195 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573932669 event=COMMAND_SESSION_ENDED token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c nextSession=27a0ffc5-ffd4-4047-a688-139acb78bd7f desiredListening=true state=STARTING
+11-11 14:04:35.195 16141 28587 I NEXUS-WakeWord: Initializing offline wake-word model session=27a0ffc5-ffd4-4047-a688-139acb78bd7f
+11-11 14:04:35.196 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573932669 event=WAKE_RESUME_REQUESTED token=5c02c58f-3cb7-4edd-a67b-dae7fb6a2f2c interactive=true keyguardLocked=false 
+11-11 14:04:36.433 16141 28587 I NEXUS-WakeWord: Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=27a0ffc5-ffd4-4047-a688-139acb78bd7f
+11-11 14:05:06.434 16141 28600 I NEXUS-WakeWord: Listening remained stable; automatic retry backoff reset
+11-11 14:05:33.166 16141 16141 I NEXUS-MainActivity: NEXUS listening stopped.
+11-11 14:05:33.169 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=573990643 event=SERVICE_START_COMMAND action=com.nexusai.app.action.STOP_WAKE_WORD startId=2 owner=789cf4c1-ed26-428b-baad-d85fd5405b42
+11-11 14:05:33.239 16141 28587 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573990713 event=MICROPHONE_RELEASED session=27a0ffc5-ffd4-4047-a688-139acb78bd7f wakeDetected=false
+11-11 14:05:33.280 16141 28587 I NEXUS-WakeWord: Wake-word session cleanup complete: 27a0ffc5-ffd4-4047-a688-139acb78bd7f
+11-11 14:05:33.280 16141 28587 I NEXUS-WakeWord: Worker 27a0ffc5-ffd4-4047-a688-139acb78bd7f finished: reason=cancellation requested wakeDetected=false intentionalCancellation=true
+11-11 14:05:33.282 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=573990756 event=SERVICE_DESTROYED owner=789cf4c1-ed26-428b-baad-d85fd5405b42
+11-11 14:05:33.672 16141 16141 I NEXUS-MainActivity: Wake-word service start requested.
+11-11 14:05:33.676 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=573991150 event=SERVICE_CREATED owner=c1398459-535e-4b13-9e69-0dbabfe946e3
+11-11 14:05:33.677 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=573991151 event=SERVICE_START_COMMAND action=com.nexusai.app.action.START_WAKE_WORD startId=1 owner=c1398459-535e-4b13-9e69-0dbabfe946e3
+11-11 14:05:33.682 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=573991156 event=SERVICE_FOREGROUND_PROMOTED owner=c1398459-535e-4b13-9e69-0dbabfe946e3
+11-11 14:05:33.682 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573991156 event=WAKE_SESSION_CREATED session=c3bbf61f-6d21-4773-bba1-32401f0060cd owner=c1398459-535e-4b13-9e69-0dbabfe946e3 state=STARTING
+11-11 14:05:33.682 16141 28587 I NEXUS-WakeWord: Initializing offline wake-word model session=c3bbf61f-6d21-4773-bba1-32401f0060cd
+11-11 14:05:35.023 16141 28587 I NEXUS-WakeWord: Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=c3bbf61f-6d21-4773-bba1-32401f0060cd
+11-11 14:05:40.439 16141 28587 I NEXUS-WakeWord: Wake word detected: NEXUS
+11-11 14:05:40.517 16141 28587 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573997991 event=MICROPHONE_RELEASED session=c3bbf61f-6d21-4773-bba1-32401f0060cd wakeDetected=true
+11-11 14:05:40.550 16141 28587 I NEXUS-WakeWord: Wake-word session cleanup complete: c3bbf61f-6d21-4773-bba1-32401f0060cd
+11-11 14:05:40.550 16141 28587 I NEXUS-WakeWord: Worker c3bbf61f-6d21-4773-bba1-32401f0060cd finished: reason=wake detected: NEXUS wakeDetected=true intentionalCancellation=false
+11-11 14:05:40.550 16141 28587 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573998024 event=MICROPHONE_RELEASED_WAKE_BROADCAST session=c3bbf61f-6d21-4773-bba1-32401f0060cd
+11-11 14:05:40.553 16141 16141 I NEXUS-MainActivity: Broadcast received: com.nexusai.app.action.WAKE_DETECTED
+11-11 14:05:40.553 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=573998028 event=MICROPHONE_HANDOFF_GRANTED token=c3bbf61f-6d21-4773-bba1-32401f0060cd state=COMMAND_ACTIVE
+11-11 14:05:40.554 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573998028 event=WAKE_TOKEN_CLAIMED token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:40.555 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573998029 event=SPEECH_RECOGNITION_REQUESTED token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:40.556 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573998030 event=ON_DEVICE_RECOGNIZER_AVAILABILITY token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false available=true
+11-11 14:05:40.557 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573998030 event=START_LISTENING_CALL token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:40.558 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573998032 event=START_LISTENING_RETURNED token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:40.763 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=573998237 event=RECOGNIZER_READY token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:42.692 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574000165 event=SPEECH_BEGIN token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:43.971 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001444 event=SPEECH_END token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:43.980 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001454 event=SPEECH_END token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:43.981 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001455 event=RECOGNIZER_RESULTS token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false resultCount=1
+11-11 14:05:43.984 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001457 event=COMMAND_SESSION_FINISH token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:43.985 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001458 event=RECOGNIZER_CLEANUP_BEGIN token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false recognizerPresent=true
+11-11 14:05:43.986 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001459 event=RECOGNIZER_CLEANUP_COMPLETE token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:43.986 16141 16141 E SpeechRecognizer: not connected to the recognition service
+11-11 14:05:43.986 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=574001460 event=WAKE_SESSION_CREATED session=23b0de73-89d4-4be1-91a0-b0405a7aa442 owner=c1398459-535e-4b13-9e69-0dbabfe946e3 state=STARTING
+11-11 14:05:43.986 16141 16141 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=574001460 event=COMMAND_SESSION_ENDED token=c3bbf61f-6d21-4773-bba1-32401f0060cd nextSession=23b0de73-89d4-4be1-91a0-b0405a7aa442 desiredListening=true state=STARTING
+11-11 14:05:43.987 16141 16141 I NEXUS-MainActivity: VOICE_EVENT elapsedMs=574001460 event=WAKE_RESUME_REQUESTED token=c3bbf61f-6d21-4773-bba1-32401f0060cd interactive=true keyguardLocked=false 
+11-11 14:05:43.988 16141 28587 I NEXUS-WakeWord: Initializing offline wake-word model session=23b0de73-89d4-4be1-91a0-b0405a7aa442
+11-11 14:05:43.988  3565  3565 W RecognitionService: #cancel received for a listener which has not started a session - ignoring this call.
+11-11 14:05:45.232 16141 28587 I NEXUS-WakeWord: Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=23b0de73-89d4-4be1-91a0-b0405a7aa442
+11-11 14:06:15.233 16141 28600 I NEXUS-WakeWord: Listening remained stable; automatic retry backoff reset
+11-11 14:06:20.009 16141 16141 I NEXUS-MainActivity: NEXUS listening stopped.
+11-11 14:06:20.010 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574037484 event=SERVICE_START_COMMAND action=com.nexusai.app.action.STOP_WAKE_WORD startId=2 owner=c1398459-535e-4b13-9e69-0dbabfe946e3
+11-11 14:06:20.111 16141 28587 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=574037585 event=MICROPHONE_RELEASED session=23b0de73-89d4-4be1-91a0-b0405a7aa442 wakeDetected=false
+11-11 14:06:20.149 16141 28587 I NEXUS-WakeWord: Wake-word session cleanup complete: 23b0de73-89d4-4be1-91a0-b0405a7aa442
+11-11 14:06:20.149 16141 28587 I NEXUS-WakeWord: Worker 23b0de73-89d4-4be1-91a0-b0405a7aa442 finished: reason=cancellation requested wakeDetected=false intentionalCancellation=true
+11-11 14:06:20.156 16141 16141 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574037630 event=SERVICE_DESTROYED owner=c1398459-535e-4b13-9e69-0dbabfe946e3
+11-11 14:06:24.434 25608 25608 I NEXUS-MainActivity: Wake-word receiver registered.
+11-11 14:06:29.079 25608 25608 I NEXUS-MainActivity: Wake-word service start requested.
+11-11 14:06:29.085 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574046559 event=SERVICE_CREATED owner=dce01a71-9f4b-4b99-920d-0666ca8d6b3c
+11-11 14:06:29.086 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574046560 event=SERVICE_START_COMMAND action=com.nexusai.app.action.START_WAKE_WORD startId=1 owner=dce01a71-9f4b-4b99-920d-0666ca8d6b3c
+11-11 14:06:29.089 25608 25608 I NEXUS-WakeWordService: VOICE_EVENT elapsedMs=574046563 event=SERVICE_FOREGROUND_PROMOTED owner=dce01a71-9f4b-4b99-920d-0666ca8d6b3c
+11-11 14:06:29.089 25608 25608 I NEXUS-WakeWord: VOICE_EVENT elapsedMs=574046564 event=WAKE_SESSION_CREATED session=427f307a-3af9-4840-bc11-aa9221b6d9e8 owner=dce01a71-9f4b-4b99-920d-0666ca8d6b3c state=STARTING
+11-11 14:06:29.090 25608 30554 I NEXUS-WakeWord: Initializing offline wake-word model session=427f307a-3af9-4840-bc11-aa9221b6d9e8
+11-11 14:06:30.324 25608 30554 I NEXUS-WakeWord: Wake-word detection started: requestedRate=16000 actualRate=16000 bufferBytes=6400 bufferFrames=3200 state=3 session=427f307a-3af9-4840-bc11-aa9221b6d9e8

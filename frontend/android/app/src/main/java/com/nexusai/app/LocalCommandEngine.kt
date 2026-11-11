@@ -12,22 +12,51 @@ object LocalCommandEngine {
 
     private const val TAG = "NEXUS-CommandEngine"
 
+    internal enum class Command {
+        TIME,
+        DATE,
+        SETTINGS,
+        CALCULATOR,
+        GREETING,
+        HOW_ARE_YOU,
+        IDENTITY,
+        HELP,
+        UNKNOWN
+    }
+
+    internal fun normalize(rawCommand: String): String = rawCommand
+        .lowercase(Locale.ROOT)
+        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
+    internal fun classify(rawCommand: String): Command = when (normalize(rawCommand)) {
+        "what time is it", "tell me the time", "current time", "what is the time",
+        "what s the time", "time", "anong oras", "anong oras na", "oras ngayon" -> Command.TIME
+
+        "what is the date", "what s the date", "today s date", "current date",
+        "what day is it", "anong petsa", "petsa ngayon", "anong araw ngayon" -> Command.DATE
+
+        "open settings", "open my settings", "settings", "open phone settings",
+        "open device settings", "buksan ang settings", "buksan settings" -> Command.SETTINGS
+
+        "open calculator", "calculator", "launch calculator", "start calculator",
+        "buksan ang calculator", "buksan calculator" -> Command.CALCULATOR
+
+        "hello", "hi", "hey", "hello nexus", "hi nexus", "hey nexus",
+        "kamusta", "kumusta", "mabuhay" -> Command.GREETING
+
+        "how are you", "how are you doing", "kumusta ka" -> Command.HOW_ARE_YOU
+        "who are you", "what is your name", "who is nexus", "sino ka" -> Command.IDENTITY
+        "what can you do", "help", "show me what you can do", "ano ang kaya mong gawin" -> Command.HELP
+        else -> Command.UNKNOWN
+    }
+
     fun execute(context: Context, rawCommand: String): String {
-        val command = rawCommand
-            .lowercase(Locale.ROOT)
-            .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
+        Log.i(TAG, "Processing local command")
 
-        Log.i(TAG, "Processing command: $command")
-
-        return when (command) {
-            "what time is it",
-            "tell me the time",
-            "current time",
-            "what is the time",
-            "what s the time",
-            "time" -> {
+        return when (classify(rawCommand)) {
+            Command.TIME -> {
                 val time = SimpleDateFormat(
                     "h:mm a",
                     Locale.getDefault()
@@ -36,11 +65,12 @@ object LocalCommandEngine {
                 "It's $time."
             }
 
-            "open settings",
-            "open my settings",
-            "settings",
-            "open phone settings",
-            "open device settings" -> {
+            Command.DATE -> {
+                val date = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date())
+                "Today is $date."
+            }
+
+            Command.SETTINGS -> {
                 try {
                     context.startActivity(
                         Intent(Settings.ACTION_SETTINGS).apply {
@@ -54,10 +84,7 @@ object LocalCommandEngine {
                 }
             }
 
-            "open calculator",
-            "calculator",
-            "launch calculator",
-            "start calculator" -> {
+            Command.CALCULATOR -> {
                 try {
                     val intent = context.packageManager
                         .getLaunchIntentForPackage("com.transsion.calculator")
@@ -75,31 +102,23 @@ object LocalCommandEngine {
                 }
             }
 
-            "hello",
-            "hi",
-            "hey",
-            "hello nexus",
-            "hi nexus",
-            "hey nexus" ->
+            Command.GREETING ->
                 "Hello! I'm NEXUS. How can I help you?"
 
-            "how are you",
-            "how are you doing" ->
+            Command.HOW_ARE_YOU ->
                 "I'm running and ready to assist you."
 
-            "who are you",
-            "what is your name",
-            "who is nexus" ->
+            Command.IDENTITY ->
                 "I'm NEXUS, your personal AI assistant."
 
-            "what can you do",
-            "help",
-            "show me what you can do" ->
+            Command.HELP ->
                 "I can tell the current time, open device settings, " +
-                    "open the calculator, and respond to basic greetings."
+                    "open the calculator, and respond to basic greetings. General AI answers " +
+                    "need an online assistant service, which has not been configured."
 
-            else ->
-                "I heard: $rawCommand. That command isn't supported yet."
+            Command.UNKNOWN ->
+                "I can't answer that with the local features available. General questions need " +
+                    "a configured online AI service."
         }
     }
 }
