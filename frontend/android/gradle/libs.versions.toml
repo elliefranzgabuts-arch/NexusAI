@@ -4,6 +4,7 @@ kotlin = "2.4.10"
 composeBom = "2026.04.01"
 activityCompose = "1.13.0"
 junit = "4.13.2"
+mlkitGenaiSpeechRecognition = "1.0.0-alpha2"
 
 [libraries]
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -16,6 +17,7 @@ androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 junit = { module = "junit:junit", version.ref = "junit" }
+mlkit-genai-speech-recognition = { module = "com.google.mlkit:genai-speech-recognition", version.ref = "mlkitGenaiSpeechRecognition" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

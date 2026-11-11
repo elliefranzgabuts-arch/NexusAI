@@ -113,6 +113,20 @@ internal object WakeWordDetection {
         var recorderLease: AudioRecordLease? = null
         var wakeDetected = false
         var terminationReason = "worker exited without wake detection"
+        val diagnosticStartMs = SystemClock.elapsedRealtime()
+        var readCalls = 0L
+        var positiveReads = 0L
+        var zeroReads = 0L
+        var negativeReads = 0L
+        var readErrors = 0L
+        var samplesReadTotal = 0L
+        var samplesFedTotal = 0L
+        var decoderCalls = 0L
+        var resultCalls = 0L
+        var wakeDetections = 0L
+        var lastRms = Double.NaN
+        var lastPeak = -1
+        var lastDiagnosticLogMs = diagnosticStartMs
 
         try {
             session.throwIfCancelled()
@@ -199,19 +213,47 @@ internal object WakeWordDetection {
             var audioLogCounter = 0
 
             while (!session.cancelled && !Thread.currentThread().isInterrupted) {
-                val samplesRead = activeRecorderLease.read(audioBuffer)
+                readCalls += 1
+                val samplesRead = try {
+                    activeRecorderLease.read(audioBuffer)
+                } catch (exception: Exception) {
+                    readErrors += 1
+                    throw exception
+                }
+
                 if (samplesRead > 0) {
-                    logAudioLevel(audioBuffer, samplesRead, ++audioLogCounter)
+                    positiveReads += 1
+                    samplesReadTotal += samplesRead
+                    val audioLevel = measureAudioLevel(audioBuffer, samplesRead)
+                    lastRms = audioLevel.first
+                    lastPeak = audioLevel.second
+                    audioLogCounter += 1
+                    if (audioLogCounter % 10 == 0) {
+                        Log.d(
+                            TAG,
+                            "NEXUS-AUDIO elapsedMs=${SystemClock.elapsedRealtime()} " +
+                                "rms=${"%.1f".format(lastRms)} peak=$lastPeak"
+                        )
+                    }
 
                     val samples = FloatArray(samplesRead) { index ->
                         audioBuffer[index] / 32768.0f
                     }
                     activeStream.acceptWaveform(samples, SAMPLE_RATE)
+                    samplesFedTotal += samplesRead
 
                     while (activeSpotter.isReady(activeStream)) {
                         activeSpotter.decode(activeStream)
+                        decoderCalls += 1
                         val result = activeSpotter.getResult(activeStream)
+                        resultCalls += 1
                         if (result.keyword.isNotBlank()) {
+                            wakeDetections += 1
+                            Log.i(
+                                TAG,
+                                "VOICE_DIAG elapsedMs=${SystemClock.elapsedRealtime()} " +
+                                    "event=WAKE_RESULT detections=$wakeDetections"
+                            )
                             Log.i(TAG, "Wake word detected: ${result.keyword}")
                             wakeDetected = true
                             terminationReason = "wake detected: ${result.keyword}"
@@ -220,10 +262,29 @@ internal object WakeWordDetection {
                     }
 
                     if (wakeDetected) break
-                } else if (samplesRead < 0) {
+                } else if (samplesRead == 0) {
+                    zeroReads += 1
+                } else {
+                    negativeReads += 1
+                    readErrors += 1
                     terminationReason = "AudioRecord.read returned $samplesRead"
                     Log.e(TAG, "AudioRecord read error: $samplesRead")
                     break
+                }
+
+                val nowMs = SystemClock.elapsedRealtime()
+                if (nowMs - lastDiagnosticLogMs >= 1000L) {
+                    Log.i(
+                        TAG,
+                        "VOICE_DIAG elapsedMs=$nowMs event=PIPELINE_SNAPSHOT " +
+                            "readCalls=$readCalls positiveReads=$positiveReads " +
+                            "zeroReads=$zeroReads negativeReads=$negativeReads " +
+                            "readErrors=$readErrors samplesRead=$samplesReadTotal " +
+                            "samplesFed=$samplesFedTotal decoderCalls=$decoderCalls " +
+                            "resultCalls=$resultCalls wakeDetections=$wakeDetections " +
+                            "lastRms=$lastRms lastPeak=$lastPeak"
+                    )
+                    lastDiagnosticLogMs = nowMs
                 }
             }
         } catch (exception: CancellationException) {
@@ -253,6 +314,18 @@ internal object WakeWordDetection {
                 Log.w(TAG, "Microphone cleanup issue", exception)
             }
 
+            Log.i(
+                TAG,
+                "VOICE_DIAG elapsedMs=${SystemClock.elapsedRealtime()} " +
+                    "event=PIPELINE_SUMMARY durationMs=${SystemClock.elapsedRealtime() - diagnosticStartMs} " +
+                    "readCalls=$readCalls positiveReads=$positiveReads " +
+                    "zeroReads=$zeroReads negativeReads=$negativeReads " +
+                    "readErrors=$readErrors samplesRead=$samplesReadTotal " +
+                    "samplesFed=$samplesFedTotal decoderCalls=$decoderCalls " +
+                    "resultCalls=$resultCalls wakeDetections=$wakeDetections " +
+                    "lastRms=$lastRms lastPeak=$lastPeak"
+            )
+
             try {
                 stream?.release()
             } catch (exception: Exception) {
@@ -275,9 +348,7 @@ internal object WakeWordDetection {
         }
     }
 
-    private fun logAudioLevel(buffer: ShortArray, samplesRead: Int, counter: Int) {
-        if (counter % 10 != 0) return
-
+    private fun measureAudioLevel(buffer: ShortArray, samplesRead: Int): Pair<Double, Int> {
         var sumSquares = 0.0
         var peak = 0
         for (index in 0 until samplesRead) {
@@ -287,6 +358,6 @@ internal object WakeWordDetection {
         }
 
         val rms = kotlin.math.sqrt(sumSquares / samplesRead)
-        Log.d(TAG, "NEXUS-AUDIO rms=${"%.1f".format(rms)} peak=$peak")
+        return rms to peak
     }
 }

@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.app.KeyguardManager
+import android.media.AudioManager
+import android.media.AudioRecordingConfiguration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -102,6 +104,122 @@ private fun disposeSpeechRecognizer(recognizer: SpeechRecognizer?) {
     }
 }
 
+private class CommandAudioMonitor(
+    context: Context,
+    private val commandToken: String
+) {
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+    private var closed = false
+
+    private val callback = object : AudioManager.AudioRecordingCallback() {
+        override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>?) {
+            synchronized(this@CommandAudioMonitor) {
+                if (!closed) logSnapshot("changed")
+            }
+        }
+    }
+
+    fun start() {
+        synchronized(this) {
+            if (closed) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    audioManager.registerAudioRecordingCallback(callback, mainHandler)
+                    logAudio("CALLBACK_REGISTERED", "supported=true")
+                } catch (exception: Exception) {
+                    logAudio(
+                        "MONITOR_UNAVAILABLE",
+                        "stage=register exception=${exception.javaClass.simpleName}"
+                    )
+                }
+            } else {
+                logAudio("MONITOR_UNAVAILABLE", "stage=register reason=api_below_24")
+            }
+        }
+        logSnapshot("initial")
+    }
+
+    fun logSnapshot(stage: String) {
+        val configurations = try {
+            audioManager.activeRecordingConfigurations
+        } catch (exception: Exception) {
+            logAudio(
+                "MONITOR_UNAVAILABLE",
+                "stage=$stage exception=${exception.javaClass.simpleName}"
+            )
+            return
+        }
+
+        val details = configurations.joinToString(separator = ";") { config ->
+            val silenced = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                config.isClientSilenced.toString()
+            } else {
+                "unavailable"
+            }
+            "{clientSource=${config.clientAudioSource},activeSource=${config.audioSource}," +
+                "silenced=$silenced,clientRate=${config.clientFormat.sampleRate}," +
+                "clientChannels=${config.clientFormat.channelCount}," +
+                "clientEncoding=${config.clientFormat.encoding}," +
+                "deviceRate=${config.format.sampleRate}," +
+                "deviceChannels=${config.format.channelCount}," +
+                "deviceEncoding=${config.format.encoding}}"
+        }.ifEmpty { "none" }
+        logAudio("RECORDING_CONFIG", "stage=$stage activeCount=${configurations.size} configs=$details")
+    }
+
+    fun close(stage: String) {
+        synchronized(this) {
+            if (closed) return
+            logSnapshot(stage)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    audioManager.unregisterAudioRecordingCallback(callback)
+                    logAudio("CALLBACK_UNREGISTERED", "stage=$stage")
+                } catch (exception: Exception) {
+                    logAudio(
+                        "CALLBACK_UNREGISTER_ERROR",
+                        "stage=$stage exception=${exception.javaClass.simpleName}"
+                    )
+                }
+            }
+            closed = true
+        }
+    }
+
+    private fun logAudio(event: String, details: String) {
+        Log.i(
+            TAG,
+            "VOICE_AUDIO elapsedMs=${SystemClock.elapsedRealtime()} token=$commandToken " +
+                "event=$event $details"
+        )
+    }
+}
+
+@Suppress("DEPRECATION")
+private fun logRecognitionServiceCandidates(context: Context, commandToken: String) {
+    try {
+        val intent = Intent("android.speech.RecognitionService")
+        val candidates = context.packageManager.queryIntentServices(intent, 0).mapNotNull { resolveInfo ->
+            val serviceInfo = resolveInfo.serviceInfo ?: return@mapNotNull null
+            val packageInfo = context.packageManager.getPackageInfo(serviceInfo.packageName, 0)
+            "{package=${serviceInfo.packageName},service=${serviceInfo.name}," +
+                "versionName=${packageInfo.versionName},versionCode=${packageInfo.versionCode}}"
+        }
+        Log.i(
+            TAG,
+            "VOICE_PROVIDER elapsedMs=${SystemClock.elapsedRealtime()} token=$commandToken " +
+                "event=SERVICE_CANDIDATES attribution=candidate_only candidates=${candidates.ifEmpty { listOf("none") }}"
+        )
+    } catch (exception: Exception) {
+        Log.i(
+            TAG,
+            "VOICE_PROVIDER elapsedMs=${SystemClock.elapsedRealtime()} token=$commandToken " +
+                "event=SERVICE_CANDIDATES attribution=unavailable " +
+                "exception=${exception.javaClass.simpleName}"
+        )
+    }
+}
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -128,6 +246,7 @@ fun NexusScreen() {
     var speechError by remember { mutableStateOf("") }
     var activeCommandToken by remember { mutableStateOf<String?>(null) }
     var activeSpeechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    var activeCommandAudioMonitor by remember { mutableStateOf<CommandAudioMonitor?>(null) }
     var recognitionRequestAtMs by remember { mutableLongStateOf(0L) }
     var recognitionReadyAtMs by remember { mutableLongStateOf(0L) }
     var speechStartedAtMs by remember { mutableLongStateOf(0L) }
@@ -145,6 +264,9 @@ fun NexusScreen() {
 
                 val recognizer = activeSpeechRecognizer
                 activeSpeechRecognizer = null
+                val audioMonitor = activeCommandAudioMonitor
+                activeCommandAudioMonitor = null
+                audioMonitor?.close("command_cleanup")
                 logVoiceEvent(
                     context,
                     "RECOGNIZER_CLEANUP_BEGIN",
@@ -208,6 +330,9 @@ fun NexusScreen() {
                     finishCommandSession.value(commandToken)
                 } else {
                     activeSpeechRecognizer = recognizer
+                    Thread({ logRecognitionServiceCandidates(context, commandToken) }, "NEXUS-RecognitionProvider-Diagnostic")
+                        .apply { isDaemon = true }
+                        .start()
 
                     fun isCurrentSession(): Boolean =
                         activeCommandToken == commandToken &&
@@ -228,6 +353,7 @@ fun NexusScreen() {
                                 override fun onReadyForSpeech(params: Bundle?) {
                                     if (isCurrentSession()) {
                                         recognitionReadyAtMs = SystemClock.elapsedRealtime()
+                                        activeCommandAudioMonitor?.logSnapshot("ready")
                                         logVoiceEvent(context, "RECOGNIZER_READY", commandToken)
                                     } else {
                                         logVoiceEvent(context, "STALE_CALLBACK_READY", commandToken)
@@ -237,6 +363,7 @@ fun NexusScreen() {
                                 override fun onBeginningOfSpeech() {
                                     if (isCurrentSession()) {
                                         speechStartedAtMs = SystemClock.elapsedRealtime()
+                                        activeCommandAudioMonitor?.logSnapshot("speech_begin")
                                         logVoiceEvent(context, "SPEECH_BEGIN", commandToken)
                                     } else {
                                         logVoiceEvent(context, "STALE_CALLBACK_SPEECH_BEGIN", commandToken)
@@ -274,6 +401,7 @@ fun NexusScreen() {
                                         "errorCode=$error readyAtMs=$recognitionReadyAtMs " +
                                             "speechStartedAtMs=$speechStartedAtMs"
                                     )
+                                    activeCommandAudioMonitor?.logSnapshot("terminal_error_$error")
                                     speechError = when (error) {
                                         SpeechRecognizer.ERROR_NO_MATCH -> "NO SPEECH RECOGNIZED"
                                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "NO COMMAND DETECTED"
@@ -297,6 +425,7 @@ fun NexusScreen() {
                                         SpeechRecognizer.RESULTS_RECOGNITION
                                     )
                                     val command = matches?.firstOrNull()
+                                    activeCommandAudioMonitor?.logSnapshot("terminal_results")
 
                                     if (!command.isNullOrBlank()) {
                                         logVoiceEvent(
@@ -328,6 +457,10 @@ fun NexusScreen() {
                                 override fun onEvent(eventType: Int, params: Bundle?) {}
                             }
                         )
+                        CommandAudioMonitor(context, commandToken).also { monitor ->
+                            activeCommandAudioMonitor = monitor
+                            monitor.start()
+                        }
                         logVoiceEvent(context, "START_LISTENING_CALL", commandToken)
                         recognizer.startListening(speechIntent)
                         logVoiceEvent(context, "START_LISTENING_RETURNED", commandToken)
@@ -357,6 +490,9 @@ fun NexusScreen() {
 
             val recognizer = activeSpeechRecognizer
             activeSpeechRecognizer = null
+            val audioMonitor = activeCommandAudioMonitor
+            activeCommandAudioMonitor = null
+            audioMonitor?.close("activity_dispose")
             disposeSpeechRecognizer(recognizer)
 
             if (commandToken != null) {

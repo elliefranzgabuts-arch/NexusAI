@@ -5,5 +5,10 @@
             android:exported="true"
             android:label="NEXUS PCM Diagnostic"
             android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity
+            android:name=".MlKitPcmDiagnosticActivity"
+            android:exported="true"
+            android:label="NEXUS ML Kit PCM Diagnostic"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
     </application>
 </manifest>
