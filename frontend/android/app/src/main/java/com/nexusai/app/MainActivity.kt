@@ -227,17 +227,19 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                NexusScreen()
+                NexusScreen(autoStartOnLaunch = savedInstanceState == null)
             }
         }
     }
 }
 
 @Composable
-fun NexusScreen() {
+fun NexusScreen(autoStartOnLaunch: Boolean = false) {
     val context = LocalContext.current
 
+    // This is the UI's requested-listening state, not confirmation that AudioRecord is active.
     var isListening by remember { mutableStateOf(false) }
+    var isStartPending by remember { mutableStateOf(false) }
     var isActivated by remember { mutableStateOf(false) }
     var isCommandListening by remember { mutableStateOf(false) }
 
@@ -648,30 +650,35 @@ fun NexusScreen() {
                 ) == PackageManager.PERMISSION_GRANTED
 
         if (microphoneGranted) {
-            val serviceIntent = Intent(
-                context,
-                WakeWordService::class.java
-            ).apply {
-                action = WakeWordService.ACTION_START
+            if (isStartPending) {
+                val serviceIntent = Intent(
+                    context,
+                    WakeWordService::class.java
+                ).apply {
+                    action = WakeWordService.ACTION_START
+                }
+
+                context.startForegroundService(serviceIntent)
+                isListening = true
+                isStartPending = false
+
+                Log.i(TAG, "Wake-word service start requested.")
             }
-
-            context.startForegroundService(serviceIntent)
-            isListening = true
-
-            Log.i(TAG, "Wake-word service start requested.")
-
         } else {
+            isStartPending = false
+            isListening = false
             Toast.makeText(
                 context,
                 "Microphone permission is required for NEXUS.",
                 Toast.LENGTH_LONG
             ).show()
-
-            isListening = false
         }
     }
 
     fun startListening() {
+        if (isListening || isStartPending) return
+
+        isStartPending = true
         val microphoneGranted =
             context.checkSelfPermission(
                 Manifest.permission.RECORD_AUDIO
@@ -698,6 +705,7 @@ fun NexusScreen() {
 
                 context.startForegroundService(serviceIntent)
                 isListening = true
+                isStartPending = false
 
                 Log.i(TAG, "Wake-word service start requested.")
             }
@@ -732,9 +740,14 @@ fun NexusScreen() {
         context.startService(serviceIntent)
 
         isListening = false
+        isStartPending = false
         isActivated = false
 
         Log.i(TAG, "NEXUS listening stopped.")
+    }
+
+    LaunchedEffect(autoStartOnLaunch) {
+        if (autoStartOnLaunch) startListening()
     }
 
     val backgroundColor = Color.Black
